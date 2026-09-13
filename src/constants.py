@@ -8,6 +8,6 @@
 G = 1.0
 c = 1.0
 
+# EOS Parameters
 K = 100.0
-Gamma = 2.0
-pi = 3.141592653589793  # Pi
+GAMMA = 2.0             #such that P=100ρ^2 as for now. 

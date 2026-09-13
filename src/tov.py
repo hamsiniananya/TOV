@@ -1,3 +1,4 @@
+# contains the TOV equations and the right-hand side of the TOV equations
 """
 Tolman-Oppenheimer-Volkoff (TOV) equations.
 
@@ -8,9 +9,9 @@ We use geometrized units:
     G = c = 1
 """
 
-import numpy as np
+import numpy as np           # for np.pi 
 
-from .eos import energy_density_from_pressure
+from .eos import energy_density_from_pressure   #this is supposed to bring an EOS function into the Tov code.
 
 
 def tov_rhs(r, m, P):
@@ -45,3 +46,4 @@ def tov_rhs(r, m, P):
     )
 
     return dm_dr, dP_dr
+

@@ -1,16 +1,17 @@
+# This file explains how pressure, density, and energy density are related 
 """
-Polytropic equation of state for neutron-star matter.
+Polytropic Equation of State (EOS)
+for neutron-star matter.
 
-This module contains functions relating:
+We use geometrized units:
+    G = c = 1
 
-    - mass density
-    - pressure
-    - energy density
+The EOS relates pressure, density,
+and energy density.
 """
 
 # Polytropic parameters
-K = 100.0
-Gamma = 2.0
+from .constants import K, GAMMA
 
 
 def pressure_from_density(rho):
@@ -19,19 +20,7 @@ def pressure_from_density(rho):
 
     P = K * rho^Gamma
     """
-    return K * rho**Gamma
-
-
-def energy_density_from_density(rho):
-    """
-    Calculate total energy density from mass density.
-
-    epsilon = rho + P / (Gamma - 1)
-
-    In our geometrized units, c = 1.
-    """
-    P = pressure_from_density(rho)
-    return rho + P / (Gamma - 1)
+    return K * rho**GAMMA
 
 
 def density_from_pressure(P):
@@ -40,16 +29,32 @@ def density_from_pressure(P):
 
     rho = (P / K)^(1/Gamma)
     """
-    return (P / K)**(1 / Gamma)
+    return (P / K)**(1 / GAMMA)
 
-# Test the EOS
-rho = 0.001
 
-P = pressure_from_density(rho)
-epsilon = energy_density_from_density(rho)
-rho_check = density_from_pressure(P)
+def energy_density(rho):
+    """
+    Calculate total energy density.
 
-print("Density:", rho)
-print("Pressure:", P)
-print("Energy density:", epsilon)
-print("Recovered density:", rho_check)
+    epsilon = rho + P / (Gamma - 1)
+
+    Since we use geometrized units, c = 1.
+    """
+    P = pressure_from_density(rho)
+
+    return rho + P / (GAMMA - 1)
+
+
+def energy_density_from_pressure(P):
+    """
+    Calculate energy density directly from pressure.
+
+    First convert:
+        P -> rho
+
+    Then:
+        rho -> epsilon
+    """
+    rho = density_from_pressure(P)
+
+    return energy_density(rho)
