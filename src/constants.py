@@ -5,9 +5,9 @@
 # Geometrized units
 # G = c = 1
 
-G = 1.0
-c = 1.0
+G = 6.67430e-11       # m^3 kg^-1 s^-2
+c = 299792458.0       # m s^-1
 
 # EOS Parameters
-K = 100.0
-GAMMA = 2.0             #such that P=100ρ^2 as for now. 
+K = 1.0e-2            
+GAMMA = 2.0            #adiabatic index for polytropic EOS

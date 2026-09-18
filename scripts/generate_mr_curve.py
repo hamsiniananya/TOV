@@ -1,6 +1,9 @@
 """
-Generate a mass-radius relation by solving
-the TOV equations for multiple central pressures.
+Mass-Radius relation for neutron stars.
+
+This script solves the TOV equations for a range of
+central pressures and plots the resulting neutron-star
+mass against radius.
 """
 
 import numpy as np
@@ -9,106 +12,78 @@ import matplotlib.pyplot as plt
 from src.solver import solve_tov
 
 
-# -------------------------
-# Central pressure values
-# -------------------------
-
-central_pressures = np.logspace(
-    -4,
-    -2,
-    100
-)
+# Solar mass in kg
+SOLAR_MASS = 1.98847e30
 
 
-# Lists to store results
-radii = []
-masses = []
+def generate_mass_radius_curve():
+    """
+    Generate the Mass-Radius relation.
 
+    Returns
+    -------
+    radii_km : numpy.ndarray
+        Neutron-star radii in km.
 
-# -------------------------
-# Solve for each pressure
-# -------------------------
+    masses_solar : numpy.ndarray
+        Neutron-star masses in solar masses.
+    """
 
-for P_c in central_pressures:
+    # Central pressure values [Pa]
+    central_pressures = np.logspace(32, 36, 30)
 
-    try:
+    radii_km = []
+    masses_solar = []
 
-        r, m, P = solve_tov(
+    for P_c in central_pressures:
+
+        # Solve TOV equations
+        radii, masses, pressures = solve_tov(
             P_c=P_c,
-            dr=0.01,
-            r_max=20.0
+            dr=10.0,
+            r_max=30000.0
         )
 
         # Surface values
-        star_radius = r[-1]
-        star_mass = m[-1]
+        radius = radii[-1]
+        mass = masses[-1]
 
-        radii.append(star_radius)
-        masses.append(star_mass)
+        # Convert units
+        radius_km = radius / 1000.0
+        mass_solar = mass / SOLAR_MASS
 
-        print(
-            f"P_c = {P_c:.6e}   "
-            f"R = {star_radius:.4f}   "
-            f"M = {star_mass:.4f}"
-        )
+        radii_km.append(radius_km)
+        masses_solar.append(mass_solar)
 
-    except Exception as error:
-
-        print(
-            f"P_c = {P_c:.6e} failed: {error}"
-        )
+    return np.array(radii_km), np.array(masses_solar)
 
 
-# Convert lists to NumPy arrays
-radii = np.array(radii)
-masses = np.array(masses)
+def plot_mass_radius():
+    """
+    Plot the Mass-Radius relation.
+    """
+
+    radii_km, masses_solar = generate_mass_radius_curve()
+
+    plt.figure(figsize=(8, 6))
+
+    plt.plot(
+        radii_km,
+        masses_solar,
+        marker="o",
+        markersize=4,
+        linewidth=2
+    )
+
+    plt.xlabel("Radius (km)")
+    plt.ylabel("Mass (Solar Masses)")
+    plt.title("Mass-Radius Relation of a Neutron Star")
+
+    plt.grid(True)
+    plt.tight_layout()
+
+    plt.show()
 
 
-# -------------------------
-# Find maximum mass
-# -------------------------
-
-max_index = np.argmax(masses)
-
-max_mass = masses[max_index]
-max_radius = radii[max_index]
-max_pressure = central_pressures[max_index]
-
-
-print()
-print("Maximum Mass Model")
-print("------------------")
-print(f"Central pressure : {max_pressure:.6e}")
-print(f"Maximum mass     : {max_mass:.4f}")
-print(f"Radius           : {max_radius:.4f}")
-
-
-# -------------------------
-# Mass-radius plot
-# -------------------------
-
-plt.figure(figsize=(8, 5))
-
-plt.plot(
-    radii,
-    masses,
-    marker="o",
-    markersize=4
-)
-
-plt.scatter(
-    max_radius,
-    max_mass,
-    s=80,
-    label=f"Maximum mass = {max_mass:.3f}"
-)
-
-plt.xlabel("Radius")
-plt.ylabel("Mass")
-plt.title("Neutron Star Mass-Radius Relation")
-
-plt.legend()
-plt.grid()
-
-plt.tight_layout()
-plt.show()
+if __name__ == "__main__":
+    plot_mass_radius()
