@@ -1,202 +1,379 @@
 """
-Numerical solver for the Tolman-Oppenheimer-Volkoff equations.
+TOV Solver
 
-Uses the fourth-order Runge-Kutta (RK4) method
-to integrate the TOV equations outward from
-the center of the neutron star.
+Solves the Tolman-Oppenheimer-Volkoff equations
+using the fourth-order Runge-Kutta (RK4) method.
 
-All quantities are in SI units:
-    radius   : m
-    mass     : kg
-    pressure : Pa
+SI units:
+    r   : radius [m]
+    m   : enclosed mass [kg]
+    P   : pressure [Pa]
+
+K and gamma are supplied as EOS parameters.
 """
 
 import numpy as np
 
+from .constants import G, c
+from .eos import (
+    density_from_pressure,
+    energy_density_from_pressure
+)
 from .tov import tov_rhs
-from .eos import density_from_pressure
 
 
-def solve_tov(P_c, dr=10.0, r_max=30000.0):
+def solve_tov(P_c, K, gamma, dr=10.0, r_max=30000.0):
     """
     Solve the TOV equations for a given central pressure.
 
     Parameters
     ----------
     P_c : float
-        Central pressure [Pa].
+        Central pressure [Pa]
+
+    K : float
+        Polytropic constant
+
+    gamma : float
+        Polytropic index
 
     dr : float
-        Radial step size [m].
+        Radial step size [m]
 
     r_max : float
-        Maximum radius to integrate to [m].
+        Maximum radius allowed [m]
 
     Returns
     -------
     radii : numpy.ndarray
-        Radial coordinates [m].
+        Radius values [m]
 
     masses : numpy.ndarray
-        Enclosed mass [kg].
+        Enclosed mass values [kg]
 
     pressures : numpy.ndarray
-        Pressure [Pa].
+        Pressure values [Pa]
+
+    surface_reached : bool
+        True if pressure reached zero before r_max.
     """
 
-    # Start slightly away from r = 0
+    # -----------------------------------------------------
+    # Central density and energy density
+    # -----------------------------------------------------
+
+    rho_c = density_from_pressure(P_c, K, gamma)
+
+    epsilon_c = energy_density_from_pressure(P_c, K, gamma)
+
+    # Convert energy density [J/m^3] to mass-energy
+    # density [kg/m^3]
+    rho_energy_c = epsilon_c / c**2
+
+    # -----------------------------------------------------
+    # Initial radius
+    # -----------------------------------------------------
+
     r = dr
 
-    # Calculate central mass density
-    rho_c = density_from_pressure(P_c)
+    # Initial mass assuming approximately uniform
+    # central energy density in the small central region
+    m = (4.0 / 3.0) * np.pi * r**3 * rho_energy_c
 
-    # Approximate mass near the center:
-    # m(r) ≈ (4/3) * pi * r^3 * rho_c
-    m = (4 / 3) * np.pi * r**3 * rho_c
-
-    # Central pressure
     P = P_c
 
-    # Store results
+    # -----------------------------------------------------
+    # Store solution
+    # -----------------------------------------------------
+
     radii = [r]
     masses = [m]
     pressures = [P]
 
-    while P > 0 and r < r_max:
+    # -----------------------------------------------------
+    # Surface flag
+    # -----------------------------------------------------
 
-        # -------------------------
-        # RK4: first evaluation
-        # -------------------------
-        k1_m, k1_P = tov_rhs(r, m, P)
+    surface_reached = False
 
-        # -------------------------
-        # RK4: second evaluation
-        # -------------------------
-        P2 = P + dr * k1_P / 2
+    # -----------------------------------------------------
+    # Main RK4 integration loop
+    # -----------------------------------------------------
 
-        if P2 <= 0:
-            fraction = -P / (dr * k1_P)
+    while r < r_max and P > 0:
 
-            r_surface = r + fraction * dr
-            m_surface = m + fraction * dr * k1_m
+        # ---------------------------------------------
+        # RK4: k1
+        # ---------------------------------------------
 
-            radii.append(r_surface)
-            masses.append(m_surface)
-            pressures.append(0.0)
+        k1_m, k1_P = tov_rhs(
+            r,
+            m,
+            P,
+            K,
+            gamma
+        )
 
-            break
+        # ---------------------------------------------
+        # RK4: k2
+        # ---------------------------------------------
 
         k2_m, k2_P = tov_rhs(
-            r + dr / 2,
-            m + dr * k1_m / 2,
-            P2
+            r + dr / 2.0,
+            m + dr * k1_m / 2.0,
+            P + dr * k1_P / 2.0,
+            K,
+            gamma
         )
 
-        # -------------------------
-        # RK4: third evaluation
-        # -------------------------
-        P3 = P + dr * k2_P / 2
-
-        if P3 <= 0:
-            fraction = -P / (dr * k2_P)
-
-            r_surface = r + fraction * (dr / 2)
-            m_surface = m + fraction * (dr / 2) * k2_m
-
-            radii.append(r_surface)
-            masses.append(m_surface)
-            pressures.append(0.0)
-
-            break
+        # ---------------------------------------------
+        # RK4: k3
+        # ---------------------------------------------
 
         k3_m, k3_P = tov_rhs(
-            r + dr / 2,
-            m + dr * k2_m / 2,
-            P3
+            r + dr / 2.0,
+            m + dr * k2_m / 2.0,
+            P + dr * k2_P / 2.0,
+            K,
+            gamma
         )
 
-        # -------------------------
-        # RK4: fourth evaluation
-        # -------------------------
-        P4 = P + dr * k3_P
-
-        if P4 <= 0:
-            fraction = -P / (dr * k3_P)
-
-            r_surface = r + fraction * dr
-            m_surface = m + fraction * dr * k3_m
-
-            radii.append(r_surface)
-            masses.append(m_surface)
-            pressures.append(0.0)
-
-            break
+        # ---------------------------------------------
+        # RK4: k4
+        # ---------------------------------------------
 
         k4_m, k4_P = tov_rhs(
             r + dr,
             m + dr * k3_m,
-            P4
+            P + dr * k3_P,
+            K,
+            gamma
         )
 
-        # -------------------------
-        # Save previous values
-        # -------------------------
-        r_previous = r
-        m_previous = m
-        P_previous = P
+        # ---------------------------------------------
+        # Calculate next values
+        # ---------------------------------------------
 
-        # -------------------------
-        # Update mass
-        # -------------------------
-        m += (dr / 6) * (
+        new_m = m + (
+            dr / 6.0
+        ) * (
             k1_m
-            + 2 * k2_m
-            + 2 * k3_m
+            + 2.0 * k2_m
+            + 2.0 * k3_m
             + k4_m
         )
 
-        # -------------------------
-        # Update pressure
-        # -------------------------
-        P += (dr / 6) * (
+        new_P = P + (
+            dr / 6.0
+        ) * (
             k1_P
-            + 2 * k2_P
-            + 2 * k3_P
+            + 2.0 * k2_P
+            + 2.0 * k3_P
             + k4_P
         )
 
-        # Move outward
-        r += dr
+        new_r = r + dr
 
-        # Store normal point
+        # ---------------------------------------------
+        # Check whether the pressure crossed zero
+        # ---------------------------------------------
+
+        if new_P <= 0:
+
+            # Linear interpolation to estimate the
+            # radius at which P = 0.
+            if P != new_P:
+
+                fraction = P / (P - new_P)
+
+                surface_r = r + fraction * dr
+
+                surface_m = m + fraction * (new_m - m)
+
+            else:
+
+                surface_r = new_r
+                surface_m = new_m
+
+            radii.append(surface_r)
+            masses.append(surface_m)
+            pressures.append(0.0)
+
+            surface_reached = True
+
+            break
+
+        # ---------------------------------------------
+        # Accept the new RK4 values
+        # ---------------------------------------------
+
+        r = new_r
+        m = new_m
+        P = new_P
+
         radii.append(r)
         masses.append(m)
         pressures.append(P)
 
-    # Return the complete solution
+    # -----------------------------------------------------
+    # Return solution
+    # -----------------------------------------------------
+
     return (
         np.array(radii),
         np.array(masses),
-        np.array(pressures)
+        np.array(pressures),
+        surface_reached
     )
 
 
-# Test the solver
+def generate_mass_radius_sequence(
+    central_pressures,
+    K,
+    gamma,
+    dr=10.0,
+    r_max=30000.0
+):
+    """
+    Generate a mass-radius sequence for multiple
+    central pressures.
+
+    Parameters
+    ----------
+    central_pressures : array-like
+        Central pressures [Pa]
+
+    K : float
+        Polytropic constant
+
+    gamma : float
+        Polytropic index
+
+    dr : float
+        Radial step size [m]
+
+    r_max : float
+        Maximum radius [m]
+
+    Returns
+    -------
+    results : list of dictionaries
+        Results for each central pressure.
+    """
+
+    results = []
+
+    for P_c in central_pressures:
+
+        (
+            radii,
+            masses,
+            pressures,
+            surface_reached
+        ) = solve_tov(
+            P_c=P_c,
+            K=K,
+            gamma=gamma,
+            dr=dr,
+            r_max=r_max
+        )
+
+        # The physical radius is the final radius
+        # if the surface was reached.
+        radius = radii[-1]
+
+        # Final enclosed mass
+        mass = masses[-1]
+
+        results.append(
+            {
+                "central_pressure": P_c,
+                "radius": radius,
+                "mass": mass,
+                "radii": radii,
+                "masses": masses,
+                "pressures": pressures,
+                "surface_reached": surface_reached
+            }
+        )
+
+    return results
+
+
+# =========================================================
+# Test / baseline run
+# =========================================================
+
 if __name__ == "__main__":
 
-    # Central pressure [Pa]
-    P_c = 1.0e34
+    # -----------------------------------------------------
+    # Baseline EOS parameters
+    # -----------------------------------------------------
 
-    radii, masses, pressures = solve_tov(
-        P_c=P_c,
+    K = 0.01
+    gamma = 2.0
+
+    # -----------------------------------------------------
+    # Central pressure sequence
+    # -----------------------------------------------------
+
+    central_pressures = np.logspace(
+        32,
+        37,
+        20
+    )
+
+    # -----------------------------------------------------
+    # Generate sequence
+    # -----------------------------------------------------
+
+    results = generate_mass_radius_sequence(
+        central_pressures=central_pressures,
+        K=K,
+        gamma=gamma,
         dr=10.0,
         r_max=30000.0
     )
 
-    # Convert SI mass to solar masses for display
+    # -----------------------------------------------------
+    # Solar mass
+    # -----------------------------------------------------
+
     solar_mass = 1.98847e30
 
-    print("Number of points:", len(radii))
-    print("Final radius:", radii[-1] / 1000, "km")
-    print("Final mass:", masses[-1] / solar_mass, "solar masses")
-    print("Final pressure:", pressures[-1], "Pa")
+    # -----------------------------------------------------
+    # Print results
+    # -----------------------------------------------------
+
+    print("\nMass-Radius Sequence")
+    print("=" * 90)
+
+    print(
+        f"{'Pc (Pa)':>15} "
+        f"{'R (km)':>12} "
+        f"{'M (Msun)':>12} "
+        f"{'Surface':>12}"
+    )
+
+    print("-" * 90)
+
+    for result in results:
+
+        P_c = result["central_pressure"]
+
+        R = result["radius"]
+
+        M = result["mass"]
+
+        surface = (
+            "YES"
+            if result["surface_reached"]
+            else "NO - r_max"
+        )
+
+        print(
+            f"{P_c:>15.3e} "
+            f"{R / 1000:>12.3f} "
+            f"{M / solar_mass:>12.6f} "
+            f"{surface:>12}"
+        )

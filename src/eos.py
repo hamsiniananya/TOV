@@ -13,10 +13,10 @@ and energy density.
 
 import numpy as np
 
-from .constants import K, GAMMA, c
+from .constants import c
 
 
-def pressure_from_density(rho):
+def pressure_from_density(rho, K, gamma):
     """
     Calculate pressure from mass density.
 
@@ -33,10 +33,10 @@ def pressure_from_density(rho):
         Pressure [Pa]
     """
 
-    return K * rho**GAMMA
+    return K * rho**gamma
 
 
-def density_from_pressure(P):
+def density_from_pressure(P, K, gamma):
     """
     Calculate mass density from pressure.
 
@@ -53,10 +53,10 @@ def density_from_pressure(P):
         Mass density [kg/m^3]
     """
 
-    return (P / K)**(1 / GAMMA)
+    return (P / K)**(1 / gamma)
 
 
-def energy_density(rho):
+def energy_density(rho, K, gamma):
     """
     Calculate total energy density.
 
@@ -73,12 +73,12 @@ def energy_density(rho):
         Energy density [J/m^3]
     """
 
-    P = pressure_from_density(rho)
+    P = pressure_from_density(rho, K, gamma)
 
-    return rho * c**2 + P / (GAMMA - 1)
+    return rho * c**2 + P / (gamma - 1)
 
 
-def energy_density_from_pressure(P):
+def energy_density_from_pressure(P, K, gamma):
     """
     Calculate energy density directly from pressure.
 
@@ -89,6 +89,6 @@ def energy_density_from_pressure(P):
         rho -> epsilon
     """
 
-    rho = density_from_pressure(P)
+    rho = density_from_pressure(P, K, gamma)
 
-    return energy_density(rho)
+    return energy_density(rho, K, gamma)
